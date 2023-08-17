@@ -1,25 +1,21 @@
 package com.atguigu.app.dim;
 
 import com.alibaba.fastjson.JSONObject;
+import com.atguigu.app.func.DimSinkFunction;
+import com.atguigu.app.func.MyBroadcastFunction;
 import com.atguigu.bean.TableProcess;
 import com.atguigu.utils.MyKafkaUtils;
 import com.ververica.cdc.connectors.mysql.source.MySqlSource;
 import com.ververica.cdc.connectors.mysql.table.StartupOptions;
 import com.ververica.cdc.debezium.JsonDebeziumDeserializationSchema;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.state.MapStateDescriptor;
-import org.apache.flink.api.common.time.Time;
-import org.apache.flink.runtime.state.hashmap.HashMapStateBackend;
-import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.BroadcastConnectedStream;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
-import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
-import org.apache.flink.streaming.api.functions.co.BroadcastProcessFunction;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
 
@@ -31,7 +27,7 @@ import java.util.concurrent.TimeUnit;
  * @description:
  */
 public class DimApp {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         //TODO 获取执行环境
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(1);
@@ -92,21 +88,13 @@ public class DimApp {
         BroadcastConnectedStream<JSONObject, String> connectDS = JsonDS.connect(broadcastDS);
 
         //TODO 根据广播流过滤主流数据
-        connectDS.process(new BroadcastProcessFunction<JSONObject, String, JSONObject>() {
-            @Override
-            public void processElement(JSONObject value, BroadcastProcessFunction<JSONObject, String, JSONObject>.ReadOnlyContext ctx, Collector<JSONObject> out) throws Exception {
-
-            }
-
-            @Override
-            public void processBroadcastElement(String value, BroadcastProcessFunction<JSONObject, String, JSONObject>.Context ctx, Collector<JSONObject> out) throws Exception {
-
-            }
-        });
-
+        SingleOutputStreamOperator<JSONObject> processDS = connectDS.process(new MyBroadcastFunction(tableprocess));
 
         //TODO 写到phonxie
+        processDS.print(">>>>>>>");
+        processDS.addSink(new DimSinkFunction());
 
         //TODO 启动
+        env.execute();
     }
 }
